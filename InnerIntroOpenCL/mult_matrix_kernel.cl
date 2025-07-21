@@ -1,8 +1,12 @@
-kernel void mult_matrix(global uint* mDims, global int* in1, global int* in2, global int* out){
+__kernel void mult_matrix_kernel(const __global int* mDim, const __global int* in1, const __global int* in2, __global int* out){
     int row = get_global_id(0);
     int col = get_global_id(1);
-
-    for (int i = 0; i < mDims[1]; i++){
-        out[row * mDims[2] + col] = in1[row * mDims[1] + i] * in2[col + mDims[2] * i];
+    
+    // printf("row = %d, col = %d\n", row, col);
+    float sum = 0.0;
+    for (int i = 0; i < mDim[1]; i++){
+        sum += in1[row * mDim[1] + i] * in2[col + mDim[2] * i];
     }
+
+    out[row * mDim[2] + col] = sum;
 }
