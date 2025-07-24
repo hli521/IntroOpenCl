@@ -33,6 +33,6 @@ Previous:
 *replaced mDims[m, k, n] with constants m, k, n.
 
 Benchmark (m = 2048, k = 2048, n = 2048, 100 iterations):
-Avg GPU runtime: 0.279739 ms
-% Decrease in latency compared to the previous kernel (0.499088 ms): 43.9%
-% Decrease in latency compared to kernel0 (2.380930 ms): 88.3%
+Avg GPU runtime: 0.312229 ms
+% Decrease in latency compared to the previous kernel (0.499088 ms): 37.4%
+% Decrease in latency compared to kernel0 (2.380930 ms): 86.9%

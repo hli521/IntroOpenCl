@@ -10,11 +10,27 @@
 
 #include <OpenCL/opencl.h>
 
+#define BUILD
 #define CPU
-// #define DEBUG
+#define DEBUG
 #define FILE_PATH "./Kernel4/mult_matrix_kernel.cl"
-// #define TEST
-#define NUM_ITERATIONS 100
+#define TEST
+#define NUM_ITERATIONS 1
+#define TS 4
+#define WPT 1
+#define WIDTH 1
+
+// #define RANDOM_INPUT
+
+long getFileSize(const char* filename) {
+    FILE* fp = fopen(filename, "rb");
+    if (!fp) return -1;
+
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    fclose(fp);
+    return size;
+}
 
 void flatArr(std::vector<std::vector<float>>& data, std::vector<float>& in){
     for(int i = 0; i < data.size(); i++){
@@ -28,7 +44,11 @@ void populateInput(std::vector<std::vector<float>>& v, size_t num_rows, size_t n
     for (int i = 0; i < num_rows; i++) {
         std::vector<float> row;
         for (int j = 0; j < num_cols; j++) {
+#ifdef RANDOM_INPUT
             row.push_back(static_cast <float> (std::rand()) / (static_cast <float> (RAND_MAX/32768)));
+#else
+            row.push_back(static_cast<float>(i*num_cols + j));
+#endif
         }
         v.push_back(row);
     }
@@ -50,7 +70,7 @@ void computeOutputOnCpu(std::vector<std::vector<float>>& data1, std::vector<std:
 }
 
 // take in the output from the CPU and GPU and verify that the values matches and return True only if they are equal
-bool verifyOutput(std::vector<float>& cpuOutput, std::vector<float>& gpuOutput) {    
+bool verifyOutput(std::vector<float>& cpuOutput, std::vector<float>& gpuOutput) {
     return cpuOutput == gpuOutput;
 }
 
@@ -70,9 +90,9 @@ int main(int argc, char** argv){
     // const uint matrixDims[3] = {m, k, n};
     
 
-#ifdef TEST
-    std::vector<std::vector<float>> data1 = {{0.1,2}, {34,22},{213,3}};
-    std::vector<std::vector<float>> data2 = {{21,32,43,12}, {-2,-21,12,2}};
+#ifndef TEST
+    std::vector<std::vector<float>> data1 = {{1,2,3,6}, {34,22,5,4}, {32,22,5,4}, {34,3,5,4}};
+    std::vector<std::vector<float>> data2 = {{65,4,3,4}, {4,2,55,44}, {3,22,5,4}, {33,21,5,42}};
     const uint m = data1.size();
     const uint k = data2.size();
     const uint n = data2.at(0).size();
@@ -80,15 +100,13 @@ int main(int argc, char** argv){
     const uint m = atoi(argv[1]);
     const uint k = atoi(argv[2]);
     const uint n = atoi(argv[3]);
-    const uint TS = 16;
-    const uint WPT = 8;
-    const size_t local[2] = { TS, TS / WPT };
     std::vector<std::vector<float>> data1;// = {{1,2}, {34,22},{213,3}};
     std::vector<std::vector<float>> data2;// = {{21,32,43,12}, {-2,-21,12,2}};
     populateInput(data1, m, k);
     populateInput(data2, k, n);
 #endif
-    const size_t globalSize[2] = {m,n / WPT};
+    const size_t local[2] = { TS / WPT, TS / WIDTH };
+    const size_t globalSize[2] = {m / WPT, n / WIDTH};
 
     std::vector<float> in1;
     std::vector<float> in2;
@@ -100,9 +118,25 @@ int main(int argc, char** argv){
     flatArr(data1, in1);
     flatArr(data2, in2);
 #ifdef DEBUG    
-    for (int i = 0; i < 10; i++) {
-        printf("in1 %d - %d\n", i, in1[i]);
-        printf("in2 %d - %d\n", i, in2[i]);
+    // for (int i = 0; i < 10; i++) {
+    //     printf("in1 %d - %d\n", i, in1[i]);
+    //     printf("in2 %d - %d\n", i, in2[i]);
+    // }
+
+    printf("Matrix A\n");
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < k; j++) {
+            printf("%10.4f ", in1[i*n + j]);
+        }
+        printf("\n");
+    }
+
+    printf("Matrix B\n");
+    for (int i = 0; i < k; i++) {
+        for (int j = 0; j < n; j++) {
+            printf("%10.4f ", in2[i*n + j]);
+        }
+        printf("\n");
     }
 #endif
 
@@ -110,7 +144,8 @@ int main(int argc, char** argv){
     cl_mem buffer_in1, buffer_in2, buffer_out, buffer_mDims;
 
     FILE *fp;
-    char kernel_code[2048];
+    const size_t file_size = getFileSize(FILE_PATH);
+    char kernel_code[file_size];
 
     clGetDeviceIDs(NULL, CL_DEVICE_TYPE_GPU, 1, &gpu, NULL);
 
@@ -129,10 +164,10 @@ int main(int argc, char** argv){
     }
     
     fp = fopen(FILE_PATH, "r");
-    size_t readSize = fread(kernel_code, 1, 2048, fp);
+    size_t readSize = fread(kernel_code, 1, file_size, fp);
     fclose(fp);
     kernel_code[readSize] = '\0';
-    printf("%s\n", kernel_code);
+    // printf("%s\n", kernel_code);
 
     program = clCreateProgramWithSource(context, 1, (const char *[]) {kernel_code}, NULL, &result);
     if (result != CL_SUCCESS){
@@ -140,11 +175,36 @@ int main(int argc, char** argv){
         return 3;
     }
 
-    result = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+    std::string build_options;
+#ifdef BUILD
+    build_options += "-DBUILD";
+    build_options += " -DTILE_SIZE=" + std::to_string(TS);
+    build_options += " -DWORK_PER_THREAD=" + std::to_string(WPT);
+    build_options += " -DTS_OVER_WPT=" + std::to_string(TS/WPT);
+    build_options += " -DTS_OVER_WIDTH=" + std::to_string(TS/WIDTH);
+    build_options += " -DK_OVER_WIDTH=" + std::to_string(k/WIDTH);
+    build_options += " -DN_OVER_WIDTH=" + std::to_string(n/WIDTH);
+#endif
+    result = clBuildProgram(program, 0, NULL, build_options.c_str(), NULL, NULL);
     if (result != CL_SUCCESS){
         printf("Couldn't build program\n");
+        // Get the size of the log
+        size_t log_size;
+        clGetProgramBuildInfo(program, gpu, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+
+        // Allocate space for the log
+        char *log = (char *) malloc(log_size);
+
+        // Get the log
+        clGetProgramBuildInfo(program, gpu, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+
+        // Print the log
+        printf("Build log:\n%s\n", log);
+        free(log);
         return 4;
     }
+
+    
     
     buffer_in1 = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(float) * m * k, NULL, &result);
     if (result != CL_SUCCESS){
@@ -206,12 +266,13 @@ int main(int argc, char** argv){
     printf("Work Group size: %lu\n", maxWGS);
 
     cl_event event;
-    double elapsed_time_ms;
+    double elapsed_time_ms = 0;
+    cl_ulong time_start, time_end;
     for (int i = 0; i < NUM_ITERATIONS; i++) {
 
 #ifdef TEST
     const size_t localTest[2] = { 1, 1 };
-    clEnqueueNDRangeKernel(queue, kernel, 2, NULL, globalSize, localTest, 0, NULL, &event); 
+    clEnqueueNDRangeKernel(queue, kernel, 2, NULL, globalSize, local, 0, NULL, &event); 
 #else
     clEnqueueNDRangeKernel(queue, kernel, 2, NULL, globalSize, local, 0, NULL, &event); 
 #endif
@@ -220,15 +281,27 @@ int main(int argc, char** argv){
     clEnqueueReadBuffer(queue, buffer_out, CL_TRUE, 0, sizeof(int) * m * n, out.data(), 0, NULL, NULL);
 
 #ifdef TEST
-    for(int i = 0; i < m*n; i++){
-        printf("%f\n", out[i]);
+    // for(int i = 0; i < m*n; i++){
+    //     printf("%f\n", out[i]);
+    // }
+    
+    printf("GPU Output\n");
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            printf("%10.4f ", out[i*n + j]);
+        }
+        printf("\n");
     }
 #endif
 
-    cl_ulong time_start, time_end;
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &time_start, NULL);
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &time_end, NULL);
-    elapsed_time_ms += (time_end - time_start) * 1.0e-6; // convert ns to ms
+    elapsed_time_ms += (time_end - time_start) * 1e-6; // convert ns to ms
+    
+    // Added dummy if statement to prevent compiler from reordering code messing up elapsed time calc
+    // if (elapsed_time_ms == 0) 
+        //printf("i: %d | ns: %llu | ms: %f | elapsed: %f\n", i, time_end - time_start, (time_end - time_start) * 1e-6, elapsed_time_ms);
+    
     }
     elapsed_time_ms /= NUM_ITERATIONS;
     std::vector<float> cpuOutput(m*n);
@@ -236,6 +309,14 @@ int main(int argc, char** argv){
     
 #ifdef CPU
     computeOutputOnCpu(data1, data2, cpuOutput);
+    printf("===============\n");
+    printf("CPU Output\n");
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            printf("%10.4f ", cpuOutput[i*n + j]);
+        }
+        printf("\n");
+    }
 #endif
     auto end = std::chrono::high_resolution_clock::now();
     printf("Verification %s\n", (verifyOutput(cpuOutput, out) ? "PASSED" : "FAILED"));

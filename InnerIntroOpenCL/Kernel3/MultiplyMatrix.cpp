@@ -11,7 +11,7 @@
 #include <OpenCL/opencl.h>
 
 #define BUILD
-// #define CPU
+#define CPU
 // #define DEBUG
 #define FILE_PATH "./Kernel3/mult_matrix_kernel.cl"
 // #define TEST
@@ -92,14 +92,14 @@ int main(int argc, char** argv){
     const uint k = atoi(argv[2]);
     const uint n = atoi(argv[3]);
     const uint TS = 16;
-    const uint WPT = 4;
-    const size_t local[2] = { TS, TS / WPT };
+    const uint WPT = 8;
+    const size_t local[2] = { TS / WPT, TS };
     std::vector<std::vector<float>> data1;// = {{1,2}, {34,22},{213,3}};
     std::vector<std::vector<float>> data2;// = {{21,32,43,12}, {-2,-21,12,2}};
     populateInput(data1, m, k);
     populateInput(data2, k, n);
 #endif
-    const size_t globalSize[2] = {m,n / WPT};
+    const size_t globalSize[2] = {m/WPT,n};
 
     std::vector<float> in1;
     std::vector<float> in2;
@@ -245,7 +245,6 @@ int main(int argc, char** argv){
     }
 #endif
 
-    // cl_ulong time_start, time_end;
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &time_start, NULL);
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &time_end, NULL);
     elapsed_time_ms += (time_end - time_start) * 1e-6; // convert ns to ms

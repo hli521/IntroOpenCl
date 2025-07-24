@@ -6,7 +6,7 @@
 __kernel void mult_matrix_kernel(const __global float* in1, const __global float* in2, __global float* out, const uint m, const uint k, const uint n){
 #ifndef BUILD
     const int TS = 16;
-    const int WPT = 2;
+    const int WPT = 4;
     const int RTS = TS/WPT;
 #endif
 
@@ -35,11 +35,11 @@ __kernel void mult_matrix_kernel(const __global float* in1, const __global float
         for(int w = 0; w < WPT; w++){
             const int tiledRow = TS * t + row; //Get global row for this tile.
             const int tiledCol = TS * t + col;
-            in1Sub[row][col + w * RTS] = in1[globalRow * k + (tiledCol + w * RTS)];
-            in2Sub[row][col + w * RTS] = in2[tiledRow * n + (globalCol + w * RTS)];
-        // if (globalRow == 1 && globalCol == 3){
-        //     printf("globalRow = %d, globalCol = %d, in1 = %d, in2 = %d\n", globalRow, globalCol, globalRow * k + tiledCol, tiledRow * k + globalCol);
-        // }
+            in1Sub[row + w * RTS][col] = in1[(globalRow + w * RTS) * k + tiledCol];
+            in2Sub[row + w * RTS][col] = in2[(tiledRow + w * RTS) * n + globalCol];
+            // if (globalRow == 1 && globalCol == 3){
+            //     printf("globalRow = %d, globalCol = %d, in1 = %d, in2 = %d\n", globalRow, globalCol, globalRow * k + tiledCol, tiledRow * k + globalCol);
+            // }
         }
 
         // Synchronize to make sure the tile is loaded
@@ -48,7 +48,7 @@ __kernel void mult_matrix_kernel(const __global float* in1, const __global float
         // Perform the computation for a single tile
         for(int i=0; i<TS; i++) {
             for (int w = 0; w < WPT; w++){
-                sum[w] += in1Sub[row][i] * in2Sub[i][col + w * RTS];
+                sum[w] += in1Sub[row + w * RTS][i] * in2Sub[i][col];
             }
         }
 
@@ -57,6 +57,6 @@ __kernel void mult_matrix_kernel(const __global float* in1, const __global float
     }
     //Store result into output
     for (int w = 0; w < WPT; w++){
-        out[globalRow * n + globalCol + w * RTS] = sum[w];
+        out[(globalRow + w * RTS) * n + globalCol] = sum[w];
     }
 }
