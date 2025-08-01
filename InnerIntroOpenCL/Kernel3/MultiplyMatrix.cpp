@@ -11,11 +11,11 @@
 #include <OpenCL/opencl.h>
 
 #define BUILD
-#define CPU
+//#define CPU
 // #define DEBUG
 #define FILE_PATH "./Kernel3/mult_matrix_kernel.cl"
 // #define TEST
-#define NUM_ITERATIONS 100
+#define NUM_ITERATIONS 3
 
 long getFileSize(const char* filename) {
     FILE* fp = fopen(filename, "rb");

@@ -1,4 +1,4 @@
-// clang++ -framework OpenCL Kernel0/MultiplyMatrix.cpp && ./a.out 1000 1000 1000
+// clang++ -framework OpenCL Kernel4/MultiplyMatrix.cpp && ./a.out 2048 2048 2048
 
 #include <chrono>
 #include <random>
@@ -11,16 +11,16 @@
 #include <OpenCL/opencl.h>
 
 #define BUILD
-#define CPU
-#define DEBUG
+// #define CPU
+// #define DEBUG
 #define FILE_PATH "./Kernel4/mult_matrix_kernel.cl"
-#define TEST
-#define NUM_ITERATIONS 1
-#define TS 4
-#define WPT 1
+// #define TEST
+#define NUM_ITERATIONS 3
+#define TS 16
+#define WPT 8
 #define WIDTH 1
 
-// #define RANDOM_INPUT
+#define RANDOM_INPUT
 
 long getFileSize(const char* filename) {
     FILE* fp = fopen(filename, "rb");
@@ -90,7 +90,7 @@ int main(int argc, char** argv){
     // const uint matrixDims[3] = {m, k, n};
     
 
-#ifndef TEST
+#ifdef TEST
     std::vector<std::vector<float>> data1 = {{1,2,3,6}, {34,22,5,4}, {32,22,5,4}, {34,3,5,4}};
     std::vector<std::vector<float>> data2 = {{65,4,3,4}, {4,2,55,44}, {3,22,5,4}, {33,21,5,42}};
     const uint m = data1.size();
@@ -167,7 +167,7 @@ int main(int argc, char** argv){
     size_t readSize = fread(kernel_code, 1, file_size, fp);
     fclose(fp);
     kernel_code[readSize] = '\0';
-    // printf("%s\n", kernel_code);
+    //printf("%s\n", kernel_code);
 
     program = clCreateProgramWithSource(context, 1, (const char *[]) {kernel_code}, NULL, &result);
     if (result != CL_SUCCESS){
@@ -180,6 +180,7 @@ int main(int argc, char** argv){
     build_options += "-DBUILD";
     build_options += " -DTILE_SIZE=" + std::to_string(TS);
     build_options += " -DWORK_PER_THREAD=" + std::to_string(WPT);
+    build_options += " -DWIDTH=" + std::to_string(WIDTH);
     build_options += " -DTS_OVER_WPT=" + std::to_string(TS/WPT);
     build_options += " -DTS_OVER_WIDTH=" + std::to_string(TS/WIDTH);
     build_options += " -DK_OVER_WIDTH=" + std::to_string(k/WIDTH);
@@ -309,14 +310,14 @@ int main(int argc, char** argv){
     
 #ifdef CPU
     computeOutputOnCpu(data1, data2, cpuOutput);
-    printf("===============\n");
-    printf("CPU Output\n");
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
-            printf("%10.4f ", cpuOutput[i*n + j]);
-        }
-        printf("\n");
-    }
+    // printf("===============\n");
+    // printf("CPU Output\n");
+    // for (int i = 0; i < m; i++) {
+    //     for (int j = 0; j < n; j++) {
+    //         printf("%10.4f ", cpuOutput[i*n + j]);
+    //     }
+    //     printf("\n");
+    // }
 #endif
     auto end = std::chrono::high_resolution_clock::now();
     printf("Verification %s\n", (verifyOutput(cpuOutput, out) ? "PASSED" : "FAILED"));
